@@ -10,36 +10,72 @@ type Wallet struct {
 	balanceInr *MoneyObject
 }
 
-/*
-	type Currency struct{
-		Name string
-		conversionRateToInr float64
-	}
-*/
 type MoneyObject struct {
 	amount   float64
-	currency string
+	currency Currency
 }
 
-var exchangeRates = map[string]float64{}
+// /*
+type Currency struct {
+	name                string
+	country             string
+	conversionRateToInr float64
+}
+
+func NewCurrency(name string, country string, conversionRateToInr float64) (*Currency, error) {
+	if conversionRateToInr <= 0 {
+		return nil, errors.New("invalid conversion rate")
+	}
+	return &Currency{
+		name:                name,
+		country:             country,
+		conversionRateToInr: conversionRateToInr,
+	}, nil
+}
+
+func (c *Currency) GetNameOfCurrency() string {
+	return c.name
+}
+
+func (c *Currency) GetCountryOfCurrency() string {
+	return c.country
+}
+
+func (c *Currency) GetConvRateToInrOfCurrency() float64 {
+	return c.conversionRateToInr
+}
+
+func (c *Currency) SetConvRateToInrOfCurrenct(NewRate float64) {
+	c.conversionRateToInr = NewRate
+}
+
+//*/
+
+var CurrencyTable = map[string]Currency{}
 
 func init() {
-	AddCurrencyAndConvRateToInr("USD", 82.47)
-	AddCurrencyAndConvRateToInr("INR", 1)
-	AddCurrencyAndConvRateToInr("SGD", 61.87)
+	AddCurrencyAndConvRateToInrInTable("USD", "USA", 82.47)
+	AddCurrencyAndConvRateToInrInTable("INR", "INDIA", 1)
+	AddCurrencyAndConvRateToInrInTable("SGD", "SINGAPORE", 61.87)
 }
 
 func (mb *MoneyObject) roundFloatInr() {
-	val := mb.amount
+	val := mb.GetAmountOfMoneyObject()
 	ratio := math.Pow(10, float64(2))
 	mb.amount = math.Round(val*ratio) / ratio
 }
 
-func AddCurrencyAndConvRateToInr(currency string, convRate float64) {
-	exchangeRates[currency] = convRate
+func AddCurrencyAndConvRateToInrInTable(name string, country string, convRate float64) error {
+	currency, err := NewCurrency(name, country, convRate)
+	if err == nil {
+		CurrencyTable[name] = *currency
+		return nil
+	} else {
+		return err
+	}
 }
 
-func NewMoneyObject(amount float64, currency string) (*MoneyObject, error) {
+func NewMoneyObject(amount float64, currency Currency) (*MoneyObject, error) {
 
 	_, errConv := GetConRateFromInr(currency)
 	if amount < 0 {
@@ -57,7 +93,7 @@ func (mb *MoneyObject) GetAmountOfMoneyObject() float64 {
 	return mb.amount
 }
 
-func (mb *MoneyObject) GetCurrencyOfMoneyObject() string {
+func (mb *MoneyObject) GetCurrencyOfMoneyObject() Currency {
 	return mb.currency
 }
 
@@ -69,10 +105,10 @@ func NewWalletBalanceInInr(moneyObject *MoneyObject) *Wallet {
 }
 
 // Get conversion rate to INR
-func GetConRateFromInr(currency string) (float64, error) {
+func GetConRateFromInr(currency Currency) (float64, error) {
 
-	if _, ok := exchangeRates[currency]; ok {
-		return float64(exchangeRates[currency]), nil
+	if _, ok := CurrencyTable[currency.name]; ok {
+		return float64(CurrencyTable[currency.name].conversionRateToInr), nil
 	} else {
 		return -1, errors.New("currency not supported")
 	}
@@ -80,9 +116,9 @@ func GetConRateFromInr(currency string) (float64, error) {
 
 // Converter
 func ConverterToInr(moneyObject MoneyObject) (*MoneyObject, error) {
-	ConRate, _ := GetConRateFromInr(moneyObject.currency)
+	ConRate, _ := GetConRateFromInr(moneyObject.GetCurrencyOfMoneyObject())
 
-	moneyObjectRet, errMoneyObject := NewMoneyObject(moneyObject.amount*ConRate, "INR")
+	moneyObjectRet, errMoneyObject := NewMoneyObject(moneyObject.GetAmountOfMoneyObject()*ConRate, CurrencyTable["INR"])
 	if errMoneyObject != nil {
 		return nil, errMoneyObject
 	}
@@ -91,7 +127,7 @@ func ConverterToInr(moneyObject MoneyObject) (*MoneyObject, error) {
 }
 
 // return balance
-func (w *Wallet) GetMoneyObjectInInr() *MoneyObject {
+func (w *Wallet) GetBalanceMoneyObjectInInr() *MoneyObject {
 	return w.balanceInr
 }
 
@@ -99,9 +135,9 @@ func (w *Wallet) GetMoneyObjectInInr() *MoneyObject {
 func (w *Wallet) AddMoney(moneyObject MoneyObject) error {
 	MoneyObjectAddedInInr, _ := ConverterToInr(moneyObject)
 
-	oldBalance := w.GetMoneyObjectInInr()
-	newBalanceInr := oldBalance.amount + MoneyObjectAddedInInr.amount
-	newBalanceInrObj, errMoneyObject := NewMoneyObject(newBalanceInr, "INR")
+	oldBalance := w.GetBalanceMoneyObjectInInr()
+	newBalanceInr := oldBalance.GetAmountOfMoneyObject() + MoneyObjectAddedInInr.GetAmountOfMoneyObject()
+	newBalanceInrObj, errMoneyObject := NewMoneyObject(newBalanceInr, CurrencyTable["INR"])
 	if errMoneyObject != nil {
 		return errMoneyObject
 	}
@@ -115,13 +151,13 @@ func (w *Wallet) AddMoney(moneyObject MoneyObject) error {
 func (w *Wallet) DebitMoney(moneyObject MoneyObject) error {
 	MoneyObjectAddedInInr, _ := ConverterToInr(moneyObject)
 
-	oldBalance := w.GetMoneyObjectInInr()
-	newBalanceInr := oldBalance.amount - MoneyObjectAddedInInr.amount
+	oldBalance := w.GetBalanceMoneyObjectInInr()
+	newBalanceInr := oldBalance.GetAmountOfMoneyObject() - MoneyObjectAddedInInr.GetAmountOfMoneyObject()
 	if newBalanceInr < 0 {
 		return errors.New("insufficient funds")
 	}
 
-	newBalanceInrObj, errMoneyObject := NewMoneyObject(newBalanceInr, "INR")
+	newBalanceInrObj, errMoneyObject := NewMoneyObject(newBalanceInr, CurrencyTable["INR"])
 	if errMoneyObject != nil {
 		return errMoneyObject
 	}
@@ -130,9 +166,23 @@ func (w *Wallet) DebitMoney(moneyObject MoneyObject) error {
 	return nil
 }
 
+// get balance in preferred currency.
+func (wallet *Wallet) GetBalanceMoneyObjectInPreferredCurrency(currency Currency) (*MoneyObject, error) {
+	ConRate, errConv := GetConRateFromInr(CurrencyTable[currency.name])
+	if errConv == nil {
+		amountInInr := wallet.GetBalanceMoneyObjectInInr().GetAmountOfMoneyObject()
+		amountInPrefCurr := amountInInr / ConRate
+		balanceMoneyObjectinPrefCurr, _ := NewMoneyObject(amountInPrefCurr, CurrencyTable["INR"])
+		balanceMoneyObjectinPrefCurr.roundFloatInr()
+		return balanceMoneyObjectinPrefCurr, nil
+	} else {
+		return nil, errConv
+	}
+}
+
 // Comparision of USD and INR
 func CheckInrToUsdConRate(UserGuessConRate float64) bool {
-	conRate, _ := GetConRateFromInr("USD")
+	conRate, _ := GetConRateFromInr(CurrencyTable["USD"])
 	if UserGuessConRate == conRate {
 		return true
 	} else {
